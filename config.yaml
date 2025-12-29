@@ -1,0 +1,50 @@
+# Pairs Trading Bot Configuration
+
+# Trading parameters
+trading:
+  entry_zscore: 2.0
+  exit_zscore: 0.5
+  stop_zscore: 3.5
+  max_pairs: 3
+  risk_per_trade: 0.02
+
+# Kalman filter
+kalman:
+  delta: 0.0001
+  lookback_zscore: 20
+
+# Cointegration
+cointegration:
+  lookback_days: 252
+  min_half_life: 5
+  max_half_life: 60
+  p_value_threshold: 0.05
+  retest_frequency_days: 7
+
+# Risk management
+risk:
+  max_pair_exposure: 0.40
+  max_gross_exposure: 1.50
+  max_daily_loss: 0.05
+  max_trade_loss: 0.03
+
+# Scheduling (Eastern Time)
+schedule:
+  signal_time: "09:25"
+  execution_time: "09:35"
+  midday_check: "12:00"
+  close_check: "15:50"
+
+# Alpaca
+alpaca:
+  paper: true
+  base_url: "https://paper-api.alpaca.markets"
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/trading_bot.log"
+
+# Database
+database:
+  path: "data/trading.db"
