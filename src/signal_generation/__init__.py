@@ -1,7 +1,7 @@
 """Signal generation modules for pairs trading."""
 
 from .kalman_filter import KalmanFilterHedgeRatio
-from .signals import SignalGenerator, TradingSignal
+from .signals import SignalGenerator, SignalType, TradingSignal
 from .spread_calculator import SpreadCalculator
 from .zscore import ZScoreCalculator
 
@@ -10,5 +10,6 @@ __all__ = [
     "SpreadCalculator",
     "ZScoreCalculator",
     "SignalGenerator",
+    "SignalType",
     "TradingSignal",
 ]
