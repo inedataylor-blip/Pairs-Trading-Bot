@@ -6,16 +6,38 @@ import sys
 import time
 from datetime import datetime
 
-import schedule
 from loguru import logger
 
 from .bot import PairsTradingBot
 from .config import Config
 from .utils.logging import setup_logging
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 
-class TradingScheduler:
-    """Scheduler for the trading bot."""
+# Eastern timezone
+ET = ZoneInfo("America/New_York")
+
+
+def get_eastern_time() -> datetime:
+    """Get current time in Eastern timezone."""
+    return datetime.now(ET)
+
+
+def is_weekday() -> bool:
+    """Check if today is a weekday (Mon-Fri)."""
+    return get_eastern_time().weekday() < 5
+
+
+def is_sunday() -> bool:
+    """Check if today is Sunday."""
+    return get_eastern_time().weekday() == 6
+
+
+class EasternTimeScheduler:
+    """Scheduler that runs on Eastern Time."""
 
     def __init__(self, bot: PairsTradingBot, config: Config):
         """
@@ -29,44 +51,56 @@ class TradingScheduler:
         self.config = config
         self.running = False
 
-    def setup_schedule(self) -> None:
-        """Set up the daily trading schedule."""
-        # Weekly pair scan (Sundays at 6 PM)
-        schedule.every().sunday.at("18:00").do(self._run_pair_scan)
+        # Track last execution to avoid duplicates
+        self._last_executed: dict[str, str] = {}
 
-        # Pre-market preparation
-        signal_time = self.config.get("schedule.signal_time", "09:25")
-        schedule.every().monday.at(signal_time).do(self._run_signal_generation)
-        schedule.every().tuesday.at(signal_time).do(self._run_signal_generation)
-        schedule.every().wednesday.at(signal_time).do(self._run_signal_generation)
-        schedule.every().thursday.at(signal_time).do(self._run_signal_generation)
-        schedule.every().friday.at(signal_time).do(self._run_signal_generation)
+        # Load schedule times from config
+        self.signal_time = self.config.get("schedule.signal_time", "09:25")
+        self.exec_time = self.config.get("schedule.execution_time", "09:35")
+        self.midday_time = self.config.get("schedule.midday_check", "12:00")
+        self.close_time = self.config.get("schedule.close_check", "15:50")
+        self.pair_scan_time = "18:00"  # Sunday evening
 
-        # Trading execution
-        exec_time = self.config.get("schedule.execution_time", "09:35")
-        schedule.every().monday.at(exec_time).do(self._run_daily_cycle)
-        schedule.every().tuesday.at(exec_time).do(self._run_daily_cycle)
-        schedule.every().wednesday.at(exec_time).do(self._run_daily_cycle)
-        schedule.every().thursday.at(exec_time).do(self._run_daily_cycle)
-        schedule.every().friday.at(exec_time).do(self._run_daily_cycle)
+    def _should_run(self, job_name: str, target_time: str) -> bool:
+        """Check if a job should run now (Eastern Time)."""
+        now = get_eastern_time()
+        current_time = now.strftime("%H:%M")
+        current_date = now.strftime("%Y-%m-%d")
 
-        # Midday check
-        midday_time = self.config.get("schedule.midday_check", "12:00")
-        schedule.every().monday.at(midday_time).do(self._run_midday_check)
-        schedule.every().tuesday.at(midday_time).do(self._run_midday_check)
-        schedule.every().wednesday.at(midday_time).do(self._run_midday_check)
-        schedule.every().thursday.at(midday_time).do(self._run_midday_check)
-        schedule.every().friday.at(midday_time).do(self._run_midday_check)
+        # Check if we're at the target time (within the minute)
+        if current_time != target_time:
+            return False
 
-        # End of day
-        close_time = self.config.get("schedule.close_check", "15:50")
-        schedule.every().monday.at(close_time).do(self._run_end_of_day)
-        schedule.every().tuesday.at(close_time).do(self._run_end_of_day)
-        schedule.every().wednesday.at(close_time).do(self._run_end_of_day)
-        schedule.every().thursday.at(close_time).do(self._run_end_of_day)
-        schedule.every().friday.at(close_time).do(self._run_end_of_day)
+        # Check if already executed today
+        execution_key = f"{job_name}_{current_date}"
+        if execution_key in self._last_executed:
+            return False
 
-        logger.info("Trading schedule configured")
+        return True
+
+    def _mark_executed(self, job_name: str) -> None:
+        """Mark a job as executed for today."""
+        now = get_eastern_time()
+        current_date = now.strftime("%Y-%m-%d")
+        execution_key = f"{job_name}_{current_date}"
+        self._last_executed[execution_key] = now.isoformat()
+
+        # Clean up old entries (keep only last 7 days)
+        keys_to_remove = []
+        for key in self._last_executed:
+            if len(keys_to_remove) > 100:  # Safety limit
+                break
+            try:
+                key_date = key.split("_")[-1]
+                if key_date < (now.strftime("%Y-%m-%d")):
+                    days_old = (now - datetime.fromisoformat(self._last_executed[key]).replace(tzinfo=ET)).days
+                    if days_old > 7:
+                        keys_to_remove.append(key)
+            except (ValueError, IndexError):
+                pass
+
+        for key in keys_to_remove:
+            del self._last_executed[key]
 
     def _run_pair_scan(self) -> None:
         """Run weekly pair scan."""
@@ -106,14 +140,78 @@ class TradingScheduler:
         except Exception as e:
             logger.error(f"End of day processing failed: {e}")
 
+    def check_and_run_jobs(self) -> None:
+        """Check all scheduled jobs and run if it's time."""
+        # Sunday: pair scan
+        if is_sunday() and self._should_run("pair_scan", self.pair_scan_time):
+            logger.info("Starting scheduled job: pair_scan")
+            self._run_pair_scan()
+            self._mark_executed("pair_scan")
+            logger.info("Completed scheduled job: pair_scan")
+
+        # Weekdays only
+        if is_weekday():
+            # Pre-market signal generation
+            if self._should_run("signal_gen", self.signal_time):
+                logger.info("Starting scheduled job: signal_generation")
+                self._run_signal_generation()
+                self._mark_executed("signal_gen")
+                logger.info("Completed scheduled job: signal_generation")
+
+            # Trading execution
+            if self._should_run("daily_cycle", self.exec_time):
+                logger.info("Starting scheduled job: daily_cycle")
+                self._run_daily_cycle()
+                self._mark_executed("daily_cycle")
+                logger.info("Completed scheduled job: daily_cycle")
+
+            # Midday check
+            if self._should_run("midday_check", self.midday_time):
+                logger.info("Starting scheduled job: midday_check")
+                self._run_midday_check()
+                self._mark_executed("midday_check")
+                logger.info("Completed scheduled job: midday_check")
+
+            # End of day
+            if self._should_run("end_of_day", self.close_time):
+                logger.info("Starting scheduled job: end_of_day")
+                self._run_end_of_day()
+                self._mark_executed("end_of_day")
+                logger.info("Completed scheduled job: end_of_day")
+
     def run(self) -> None:
         """Run the scheduler loop."""
         self.running = True
-        logger.info("Starting scheduler...")
+
+        logger.info("=" * 60)
+        logger.info("Starting Pairs Trading Bot Scheduler")
+        logger.info("=" * 60)
+        logger.info(f"All times are in Eastern Time (ET)")
+        logger.info(f"Current ET time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("Scheduled jobs:")
+        logger.info(f"  - Signal generation: {self.signal_time} ET (Mon-Fri)")
+        logger.info(f"  - Trade execution: {self.exec_time} ET (Mon-Fri)")
+        logger.info(f"  - Midday check: {self.midday_time} ET (Mon-Fri)")
+        logger.info(f"  - End of day: {self.close_time} ET (Mon-Fri)")
+        logger.info(f"  - Pair scan: {self.pair_scan_time} ET (Sunday)")
+        logger.info("=" * 60)
+
+        last_heartbeat = get_eastern_time()
 
         while self.running:
-            schedule.run_pending()
-            time.sleep(60)  # Check every minute
+            try:
+                self.check_and_run_jobs()
+
+                # Hourly heartbeat
+                now = get_eastern_time()
+                if (now - last_heartbeat).total_seconds() >= 3600:
+                    logger.info(f"Scheduler heartbeat - bot is running (ET: {now.strftime('%H:%M')})")
+                    last_heartbeat = now
+
+            except Exception as e:
+                logger.error(f"Scheduler error: {e}")
+
+            time.sleep(30)  # Check every 30 seconds
 
     def stop(self) -> None:
         """Stop the scheduler."""
@@ -174,14 +272,15 @@ def main() -> None:
     """Main entry point."""
     args = parse_args()
 
-    # Setup logging
-    setup_logging(log_level=args.log_level)
+    # Setup logging with daily files
+    setup_logging(log_level=args.log_level, log_dir="logs")
 
     # Load configuration
     config = Config(args.config)
 
     logger.info("=" * 60)
     logger.info("Cointegration Pairs Trading Bot")
+    logger.info(f"Current Eastern Time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 60)
 
     # Initialize bot
@@ -191,6 +290,7 @@ def main() -> None:
     if args.status:
         status = bot.get_status()
         print("\nBot Status:")
+        print(f"  Current ET Time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"  Market Open: {status['market_open']}")
         print(f"  Account Equity: ${status['account']['equity']:,.2f}")
         print(f"  Active Pairs: {status['active_pairs']}")
@@ -209,15 +309,16 @@ def main() -> None:
     if args.backtest:
         logger.info("Backtest mode - use backtest module directly")
         print("\nTo run backtest, use:")
-        print("  from src.backtest import BacktestEngine")
-        print("  engine = BacktestEngine()")
-        print("  result = engine.run(prices1, prices2, pair)")
+        print("  python examples/run_backtest.py")
         return
 
     # Set up signal handlers
+    scheduler = None
+
     def signal_handler(signum, frame):
         logger.info("Received shutdown signal...")
-        scheduler.stop()
+        if scheduler:
+            scheduler.stop()
         bot.shutdown()
         sys.exit(0)
 
@@ -228,9 +329,8 @@ def main() -> None:
     logger.info("Running initial pair scan...")
     bot.scan_pairs()
 
-    # Start scheduler
-    scheduler = TradingScheduler(bot, config)
-    scheduler.setup_schedule()
+    # Start scheduler with Eastern Time
+    scheduler = EasternTimeScheduler(bot, config)
 
     try:
         scheduler.run()

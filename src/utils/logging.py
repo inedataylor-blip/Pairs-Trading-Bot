@@ -1,30 +1,41 @@
 """Logging configuration for the trading bot."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
+
+def get_eastern_time() -> datetime:
+    """Get current time in Eastern timezone."""
+    return datetime.now(ZoneInfo("America/New_York"))
+
 
 def setup_logging(
     log_level: str = "INFO",
-    log_file: str = "logs/trading_bot.log",
-    rotation: str = "10 MB",
-    retention: str = "1 week",
+    log_dir: str = "logs",
 ) -> None:
     """
-    Set up logging configuration.
+    Set up logging configuration with daily log files.
 
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        log_file: Path to log file
-        rotation: When to rotate log file
-        retention: How long to keep old logs
+        log_dir: Directory for log files
     """
     # Remove default handler
     logger.remove()
 
-    # Console handler
+    # Create log directory
+    log_path = Path(log_dir)
+    log_path.mkdir(parents=True, exist_ok=True)
+
+    # Console handler with Eastern Time
     logger.add(
         sys.stderr,
         level=log_level,
@@ -36,28 +47,34 @@ def setup_logging(
         ),
     )
 
-    # Create log directory
-    log_path = Path(log_file)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # File handler
+    # Daily log file - rotates at midnight
     logger.add(
-        log_file,
+        log_path / "pairs_bot_{time:YYYY-MM-DD}.log",
         level=log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-        rotation=rotation,
-        retention=retention,
+        rotation="00:00",  # Rotate at midnight
+        retention="30 days",
         compression="zip",
     )
 
-    # Trade-specific log
+    # Trade-specific log (daily)
     logger.add(
-        log_path.parent / "trades.log",
+        log_path / "trades_{time:YYYY-MM-DD}.log",
         level="INFO",
         filter=lambda record: "TRADE" in record["message"],
         format="{time:YYYY-MM-DD HH:mm:ss} | {message}",
-        rotation="1 day",
-        retention="1 month",
+        rotation="00:00",
+        retention="90 days",
     )
 
-    logger.info(f"Logging initialized. Level: {log_level}, File: {log_file}")
+    # Error log (persistent)
+    logger.add(
+        log_path / "errors.log",
+        level="ERROR",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+        rotation="10 MB",
+        retention="90 days",
+        compression="zip",
+    )
+
+    logger.info(f"Logging initialized. Level: {log_level}, Directory: {log_dir}")
