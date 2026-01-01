@@ -38,16 +38,21 @@ def fetch_pair_data(
     """
     logger.info(f"Fetching data for {symbol1} and {symbol2}...")
 
-    # Download data
-    data1 = yf.download(symbol1, start=start_date, end=end_date, progress=False)
-    data2 = yf.download(symbol2, start=start_date, end=end_date, progress=False)
+    # Download data (auto_adjust=True is now default in yfinance)
+    data1 = yf.download(symbol1, start=start_date, end=end_date, progress=False, auto_adjust=True)
+    data2 = yf.download(symbol2, start=start_date, end=end_date, progress=False, auto_adjust=True)
 
     if data1.empty or data2.empty:
         raise ValueError(f"Could not fetch data for {symbol1} or {symbol2}")
 
-    # Get adjusted close prices
-    prices1 = data1["Adj Close"].squeeze()
-    prices2 = data2["Adj Close"].squeeze()
+    # Get close prices (already adjusted when auto_adjust=True)
+    # Handle both single-level and multi-level column indexes
+    if isinstance(data1.columns, pd.MultiIndex):
+        prices1 = data1["Close"][symbol1]
+        prices2 = data2["Close"][symbol2]
+    else:
+        prices1 = data1["Close"].squeeze()
+        prices2 = data2["Close"].squeeze()
 
     # Align on common dates
     common_idx = prices1.index.intersection(prices2.index)
