@@ -130,6 +130,17 @@ class PairsTradingBot:
                 )
                 results.append(result)
 
+                # Log diagnostic info for why pair passed/failed
+                status = "PASS" if result.is_cointegrated else "FAIL"
+                p_status = "✓" if result.p_value < 0.05 else "✗"
+                hl_status = "✓" if 5 < result.half_life < 60 else "✗"
+                logger.info(
+                    f"  {pair[0]}/{pair[1]}: {status} | "
+                    f"p={result.p_value:.4f} {p_status} | "
+                    f"half_life={result.half_life:.1f}d {hl_status} | "
+                    f"hurst={result.hurst_exponent:.3f}"
+                )
+
                 # Store result in database
                 self.database.record_cointegration_result(
                     pair=pair,
