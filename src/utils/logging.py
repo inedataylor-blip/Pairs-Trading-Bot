@@ -31,8 +31,14 @@ def setup_logging(
     # Remove default handler
     logger.remove()
 
-    # Create log directory
-    log_path = Path(log_dir)
+    # Create log directory using absolute path relative to project root
+    if not Path(log_dir).is_absolute():
+        # Get project root (parent of src/)
+        project_root = Path(__file__).parent.parent.parent
+        log_path = project_root / log_dir
+    else:
+        log_path = Path(log_dir)
+
     log_path.mkdir(parents=True, exist_ok=True)
 
     # Console handler with Eastern Time
