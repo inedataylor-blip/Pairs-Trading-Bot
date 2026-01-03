@@ -10,7 +10,7 @@ from loguru import logger
 
 from .bot import PairsTradingBot
 from .config import Config
-from .utils.logging import setup_logging
+from .utils.logging import setup_logging, BOT_NAME, BOT_STRATEGY, BOT_VERSION
 
 try:
     from zoneinfo import ZoneInfo
@@ -184,9 +184,10 @@ class EasternTimeScheduler:
         self.running = True
 
         logger.info("=" * 60)
-        logger.info("Starting Pairs Trading Bot Scheduler")
+        logger.info(f"[{BOT_NAME}] Starting Scheduler")
+        logger.info(f"Strategy: {BOT_STRATEGY}")
         logger.info("=" * 60)
-        logger.info(f"All times are in Eastern Time (ET)")
+        logger.info("All times are in Eastern Time (ET)")
         logger.info(f"Current ET time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("Scheduled jobs:")
         logger.info(f"  - Signal generation: {self.signal_time} ET (Mon-Fri)")
@@ -279,7 +280,8 @@ def main() -> None:
     config = Config(args.config)
 
     logger.info("=" * 60)
-    logger.info("Cointegration Pairs Trading Bot")
+    logger.info(f"BOT: {BOT_NAME} | STRATEGY: {BOT_STRATEGY}")
+    logger.info(f"VERSION: {BOT_VERSION}")
     logger.info(f"Current Eastern Time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 60)
 
@@ -289,7 +291,8 @@ def main() -> None:
     # Handle specific modes
     if args.status:
         status = bot.get_status()
-        print("\nBot Status:")
+        print(f"\n[{BOT_NAME}] {BOT_STRATEGY} - Status")
+        print("=" * 50)
         print(f"  Current ET Time: {get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"  Market Open: {status['market_open']}")
         print(f"  Account Equity: ${status['account']['equity']:,.2f}")
@@ -301,9 +304,13 @@ def main() -> None:
     if args.scan:
         logger.info("Running pair scan...")
         pairs = bot.scan_pairs()
-        print("\nCointegrated Pairs:")
-        for i, pair in enumerate(pairs, 1):
-            print(f"  {i}. {pair}")
+        print(f"\n[{BOT_NAME}] Cointegrated Pairs Found:")
+        print("=" * 40)
+        if pairs:
+            for i, pair in enumerate(pairs, 1):
+                print(f"  {i}. {pair[0]}/{pair[1]}")
+        else:
+            print("  No pairs passed cointegration criteria")
         return
 
     if args.backtest:

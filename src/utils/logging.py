@@ -11,6 +11,11 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo
 
+# Bot identification
+BOT_NAME = "PAIRS-COI"  # Short identifier for log prefix
+BOT_STRATEGY = "Cointegration Pairs Trading"
+BOT_VERSION = "1.0.0"
+
 
 def get_eastern_time() -> datetime:
     """Get current time in Eastern timezone."""
@@ -41,23 +46,23 @@ def setup_logging(
 
     log_path.mkdir(parents=True, exist_ok=True)
 
-    # Console handler with Eastern Time
+    # Console handler with Eastern Time and bot identifier
     logger.add(
         sys.stderr,
         level=log_level,
         format=(
+            f"<blue>[{BOT_NAME}]</blue> "
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
             "<level>{message}</level>"
         ),
     )
 
     # Daily log file - rotates at midnight
     logger.add(
-        log_path / "pairs_bot_{time:YYYY-MM-DD}.log",
+        log_path / f"{BOT_NAME.lower()}_{{time:YYYY-MM-DD}}.log",
         level=log_level,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+        format=f"[{BOT_NAME}] {{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{name}}:{{function}}:{{line}} | {{message}}",
         rotation="00:00",  # Rotate at midnight
         retention="30 days",
         compression="zip",
@@ -65,22 +70,22 @@ def setup_logging(
 
     # Trade-specific log (daily)
     logger.add(
-        log_path / "trades_{time:YYYY-MM-DD}.log",
+        log_path / f"{BOT_NAME.lower()}_trades_{{time:YYYY-MM-DD}}.log",
         level="INFO",
         filter=lambda record: "TRADE" in record["message"],
-        format="{time:YYYY-MM-DD HH:mm:ss} | {message}",
+        format=f"[{BOT_NAME}] {{time:YYYY-MM-DD HH:mm:ss}} | {{message}}",
         rotation="00:00",
         retention="90 days",
     )
 
     # Error log (persistent)
     logger.add(
-        log_path / "errors.log",
+        log_path / f"{BOT_NAME.lower()}_errors.log",
         level="ERROR",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+        format=f"[{BOT_NAME}] {{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{name}}:{{function}}:{{line}} | {{message}}",
         rotation="10 MB",
         retention="90 days",
         compression="zip",
     )
 
-    logger.info(f"Logging initialized. Level: {log_level}, Directory: {log_dir}")
+    logger.info(f"Logging initialized. Level: {log_level}, Directory: {log_path}")
