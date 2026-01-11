@@ -88,14 +88,20 @@ risk:
 
 ## Usage
 
-### Run the Bot
+### Run the Bot (Paper Trading)
 
 ```bash
-# Start the trading bot (paper trading)
-python -m src.main --dry-run
-
-# Run with live trading (use with caution!)
+# Start the bot with paper trading (recommended for testing)
 python -m src.main
+```
+
+The bot uses Alpaca's paper trading API by default. Set `ALPACA_PAPER=true` in your `.env` file.
+
+### Run in Dry-Run Mode
+
+```bash
+# Dry-run mode: bot runs but no orders are submitted
+python -m src.main --dry-run
 ```
 
 ### Run Pair Scan Only
@@ -115,6 +121,17 @@ python -m src.main --status
 ```bash
 python examples/run_backtest.py
 ```
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Run without submitting orders |
+| `--scan` | Run pair scan only and exit |
+| `--status` | Show current status and exit |
+| `--backtest` | Show backtest instructions |
+| `--log-level` | Set logging level (DEBUG, INFO, WARNING, ERROR) |
+| `--config` | Path to config file (default: config.yaml) |
 
 ## Project Structure
 
@@ -213,16 +230,15 @@ The backtesting framework calculates:
 - Average Holding Period
 - Expectancy per trade
 
-## Daily Schedule
+## Daily Schedule (Mon-Fri, Eastern Time)
 
 | Time (ET) | Action |
 |-----------|--------|
-| 6:00 AM | Pre-market data pull |
 | 9:25 AM | Generate signals |
 | 9:35 AM | Execute trades |
 | 12:00 PM | Midday check |
 | 3:50 PM | End of day processing |
-| Sunday 6 PM | Weekly pair scan |
+| 6:00 PM | Daily pair scan |
 
 ## License
 
