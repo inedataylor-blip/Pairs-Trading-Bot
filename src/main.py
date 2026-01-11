@@ -31,11 +31,6 @@ def is_weekday() -> bool:
     return get_eastern_time().weekday() < 5
 
 
-def is_sunday() -> bool:
-    """Check if today is Sunday."""
-    return get_eastern_time().weekday() == 6
-
-
 class EasternTimeScheduler:
     """Scheduler that runs on Eastern Time."""
 
@@ -59,7 +54,7 @@ class EasternTimeScheduler:
         self.exec_time = self.config.get("schedule.execution_time", "09:35")
         self.midday_time = self.config.get("schedule.midday_check", "12:00")
         self.close_time = self.config.get("schedule.close_check", "15:50")
-        self.pair_scan_time = "18:00"  # Sunday evening
+        self.pair_scan_time = "18:00"  # After market close
 
     def _should_run(self, job_name: str, target_time: str) -> bool:
         """Check if a job should run now (Eastern Time)."""
@@ -103,9 +98,9 @@ class EasternTimeScheduler:
             del self._last_executed[key]
 
     def _run_pair_scan(self) -> None:
-        """Run weekly pair scan."""
+        """Run daily pair scan."""
         try:
-            logger.info("Running weekly pair scan...")
+            logger.info("Running daily pair scan...")
             self.bot.scan_pairs()
         except Exception as e:
             logger.error(f"Pair scan failed: {e}")
@@ -142,13 +137,6 @@ class EasternTimeScheduler:
 
     def check_and_run_jobs(self) -> None:
         """Check all scheduled jobs and run if it's time."""
-        # Sunday: pair scan
-        if is_sunday() and self._should_run("pair_scan", self.pair_scan_time):
-            logger.info("Starting scheduled job: pair_scan")
-            self._run_pair_scan()
-            self._mark_executed("pair_scan")
-            logger.info("Completed scheduled job: pair_scan")
-
         # Weekdays only
         if is_weekday():
             # Pre-market signal generation
@@ -179,6 +167,13 @@ class EasternTimeScheduler:
                 self._mark_executed("end_of_day")
                 logger.info("Completed scheduled job: end_of_day")
 
+            # Daily pair scan (after market close)
+            if self._should_run("pair_scan", self.pair_scan_time):
+                logger.info("Starting scheduled job: pair_scan")
+                self._run_pair_scan()
+                self._mark_executed("pair_scan")
+                logger.info("Completed scheduled job: pair_scan")
+
     def run(self) -> None:
         """Run the scheduler loop."""
         self.running = True
@@ -194,7 +189,7 @@ class EasternTimeScheduler:
         logger.info(f"  - Trade execution: {self.exec_time} ET (Mon-Fri)")
         logger.info(f"  - Midday check: {self.midday_time} ET (Mon-Fri)")
         logger.info(f"  - End of day: {self.close_time} ET (Mon-Fri)")
-        logger.info(f"  - Pair scan: {self.pair_scan_time} ET (Sunday)")
+        logger.info(f"  - Pair scan: {self.pair_scan_time} ET (Mon-Fri)")
         logger.info("=" * 60)
 
         last_heartbeat = get_eastern_time()
