@@ -65,7 +65,6 @@ def setup_logging(
         format=f"[{BOT_NAME}] {{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{name}}:{{function}}:{{line}} | {{message}}",
         rotation="00:00",  # Rotate at midnight
         retention="30 days",
-        compression="zip",
     )
 
     # Trade-specific log (daily)
@@ -85,7 +84,6 @@ def setup_logging(
         format=f"[{BOT_NAME}] {{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{name}}:{{function}}:{{line}} | {{message}}",
         rotation="10 MB",
         retention="90 days",
-        compression="zip",
     )
 
     logger.info(f"Logging initialized. Level: {log_level}, Directory: {log_path}")
